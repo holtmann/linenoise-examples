@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 #include <stdio.h>
+#include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -56,8 +57,13 @@ static bool stdin_callback(__unused struct l_io *io, __unused void *user_data)
 	linenoiseEditStop(&ls);
 
 	if (line == NULL) {
-		l_main_quit();
-		return false;
+		if (errno == ENOENT) {
+			l_main_quit();
+			return false;
+		} else {
+			setup_linenoise();
+			return true;
+		}
 	}
 
 	if (line[0] != '\0') {
@@ -68,7 +74,6 @@ static bool stdin_callback(__unused struct l_io *io, __unused void *user_data)
 	linenoiseFree(line);
 
 	setup_linenoise();
-
 	return true;
 }
 
