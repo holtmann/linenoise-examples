@@ -11,7 +11,7 @@
 
 #define __unused __attribute__((unused))
 
-#define UPDATE_RATE (2)
+#define UPDATE_RATE (5)
 
 static struct linenoiseState ls;
 static char line_buf[1024];
@@ -38,6 +38,12 @@ static void update_callback(struct l_timeout *timeout,
 	l_timeout_modify(timeout, UPDATE_RATE);
 }
 
+static void setup_linenoise(void)
+{
+	linenoiseEditStart(&ls, STDIN_FILENO, STDOUT_FILENO,
+				line_buf, sizeof(line_buf), "hello> ");
+}
+
 static bool stdin_callback(__unused struct l_io *io, __unused void *user_data)
 {
 	char *line;
@@ -54,22 +60,44 @@ static bool stdin_callback(__unused struct l_io *io, __unused void *user_data)
 		return false;
 	}
 
-	printf("%s\n", line);
+	if (line[0] != '\0') {
+		linenoiseHistoryAdd(line);
+		printf("%s\n", line);
+	}
+
 	linenoiseFree(line);
 
-	l_main_quit();
-	return false;
+	setup_linenoise();
+
+	return true;
 }
 
-static void start_linenoise(__unused void *user_data)
+static void completion_callback(const char *buf, linenoiseCompletions *lc)
 {
-	linenoiseEditStart(&ls, STDIN_FILENO, -1,
-				line_buf, sizeof(line_buf), "hello> ");
+	linenoiseAddCompletion(lc, buf);
+}
+
+static void start_linenoise(void)
+{
+	setup_linenoise();
 
 	stdin_io = l_io_new(STDIN_FILENO);
 	l_io_set_read_handler(stdin_io, stdin_callback, NULL, NULL);
 
 	update_to = l_timeout_create(UPDATE_RATE, update_callback, NULL, NULL);
+
+	linenoiseSetCompletionCallback(completion_callback);
+}
+
+static void stop_linenoise(void)
+{
+	l_timeout_remove(update_to);
+	l_io_destroy(stdin_io);
+}
+
+static void start_callback(__unused void *user_data)
+{
+	start_linenoise();
 }
 
 static void signal_handler(uint32_t signo, __unused void *user_data)
@@ -92,12 +120,11 @@ int main(void)
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
-	l_idle_oneshot(start_linenoise, NULL, NULL);
+	l_idle_oneshot(start_callback, NULL, NULL);
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
-	l_timeout_remove(update_to);
-	l_io_destroy(stdin_io);
+	stop_linenoise();
 
 	l_main_exit();
 
