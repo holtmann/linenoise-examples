@@ -12,7 +12,7 @@ int main(void)
 	line = linenoise("hello> ");
 	if (line) {
 		printf("%s\n", line);
-		free(line);
+		linenoiseFree(line);
 	}
 
 	return EXIT_SUCCESS;
